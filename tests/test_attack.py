@@ -1,7 +1,10 @@
+"""Test for the Mitre ATTACK Scio plugin"""
+
 import os
 
 import addict
 import pytest
+
 from act.scio.plugins import mitre_attack
 
 TEST_TEXT = """
