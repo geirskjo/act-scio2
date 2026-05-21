@@ -76,7 +76,6 @@ def remove_non_iso_dates(
     filtered = {}
 
     for key, value in metadata.items():
-
         if key in isodate_fields:
             if not isinstance(value, str):
                 logging.warning("date value is not string %s:%s", key, value)
@@ -134,7 +133,7 @@ async def analyze(
     # make sure we have a Creation-Date field even though the
     # document did not contain one. When missing, use current analyzed time.
     nlpdata["Creation-Date"] = nlpdata.get("metadata", {}).get(
-        "Creation-Date", nlpdata["Analyzed-Date"]
+        "dcterms:created", nlpdata["Analyzed-Date"]
     )
 
     staged = []  # for plugins with dependencies
@@ -155,7 +154,12 @@ async def analyze(
 
         for task in tasks:
             if task.exception():
-                logging.error("%s returned an exception: %s", task, task.exception())
+                logging.error(
+                    "%s returned an exception: %s, \n%s",
+                    task,
+                    task.exception(),
+                    "\n".join(str(frame) for frame in task.get_stack()),
+                )
             else:
                 res = task.result()
                 nlpdata[res.name] = res.result
@@ -245,7 +249,6 @@ async def async_main() -> None:
                 logging.error("Unable to post result data to webdump: %s", r.text)
 
         if elasticsearch_client and store:
-
             if not hexdigest:
                 logging.error("Missing hexdigest, skipping elasticsearch storage")
             else:
@@ -265,7 +268,7 @@ async def async_main() -> None:
             # Print to stdout if we do not send to webdump or elasticsearch
             print(result_json)
 
-        if not store:
+        if (not store) and filename:
             # Delete file after it has been analyzed
             logging.info(
                 "Removed file because store=False (hexdigest=%s, filename=%s)",
@@ -275,7 +278,7 @@ async def async_main() -> None:
 
             try:
                 Path(filename).unlink()
-            except (NotADirectoryError, FileNotFoundError) as e:
+            except (NotADirectoryError, FileNotFoundError, TypeError) as e:
                 logging.error("Unable to remove %s: %s", filename, e)
 
         # If we are not listening on a beanstalk work queue, behave like a command line

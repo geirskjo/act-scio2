@@ -4,8 +4,8 @@ This module contains function to convert an alias config file an/or an alias int
 regular expressions for matching purposes"""
 
 import re
-import sys
 from typing import List, Optional, Set, Text
+from logging import warning, info
 
 
 def alias_set_from_config(config_file_name: Text) -> Set[Text]:
@@ -13,7 +13,11 @@ def alias_set_from_config(config_file_name: Text) -> Set[Text]:
 
     alias_set = set()
     for line in open(config_file_name):
-        pri, rest = re.split(r"(?<!\\):", line, maxsplit=1)
+        try:
+            pri, rest = re.split(r"(?<!\\):", line, maxsplit=1)
+        except ValueError:
+            warning(f"Unable to split alias (missing colon?): {line}")
+            continue
         aliases = re.split(r"(?<!\\),", rest)
         aliases.append(pri)
         aliases = [alias.strip() for alias in aliases if alias.strip() != ""]
@@ -84,6 +88,7 @@ def normalize(
     upper: bool = False,
     capitalize: bool = False,
     uppercase_abbr: Optional[List[Text]] = None,
+    allow_non_alphanumeric: Optional[Text] = None,
 ) -> str:
     """
 
@@ -96,6 +101,8 @@ def normalize(
     upper (bool): uppercase
     capitalize (bool): uppercase all first characters in words
     uppercase_abbr (list[str]): list of abbrevations to uppercase
+    allow_non_alphanumeric (str): regular expression that will be excluded from
+                                  removal of non_alphanumeric characters
 
     The transformation in ran in the same order as the arguments are specified,
     so you can use lower=True and capitalize=True to transform sOmeThing -> Something
@@ -112,7 +119,9 @@ def normalize(
         # Replace "winntiGroup" with "winnti group"
         name = re.sub(r"([a-z])([A-Z])", r"\1 \2", name)
 
-    if remove_non_alphanumeric:
+    if remove_non_alphanumeric and not (
+        allow_non_alphanumeric and re.search(allow_non_alphanumeric, name)
+    ):
         # Replace "APT-27" with "APT 27"
         name = re.sub(r"[^a-zA-Z0-9 ]+", " ", name, 0)
 
@@ -146,9 +155,7 @@ def get_reg_ex_set(config_file_name: Text) -> Set[Text]:
     alias_set = alias_set_from_config(config_file_name)
     for alias in alias_set:
         if alias.isdigit():
-            sys.stderr.write(
-                f"WARNING: Unable to create regex from all digit alias {alias}\n"
-            )
+            info(f"Unable to create regex from all digit alias {alias}")
             continue
         regex_set.add(regex_from_alias(alias))
 
